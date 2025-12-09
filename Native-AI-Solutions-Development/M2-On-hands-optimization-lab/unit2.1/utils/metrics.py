@@ -6,6 +6,124 @@ This module is intentionally lightweight so it can be
 used both locally and in Google Colab.
 """
 
+
+
+
+
+"""
+Utility functions for simple model metrics used in the labs.
+"""
+
+from typing import Optional
+import onnx
+
+
+def estimate_macs(onnx_model_path: str) -> Optional[int]:
+    """
+    Very rough MACs estimate for a feed-forward ONNX model.
+
+    This function walks through the ONNX graph and sums up
+    MACs for the most common layers (Conv and Gemm).
+    It is intentionally simplified for teaching purposes.
+
+    Args:
+        onnx_model_path: Path to the ONNX model file.
+
+    Returns:
+        Integer with an approximate MAC count, or None if the
+        model cannot be parsed.
+    """
+    model = onnx.load(onnx_model_path)
+    graph = model.graph
+
+    # Build a map from tensor name -> (C, H, W...) shape info (when available)
+    shape_map = {}
+
+    # Read shapes from value_info / inputs / outputs
+    def _register_shape(value_info):
+        name = value_info.name
+        if not value_info.type.tensor_type.shape.dim:
+            return
+        dims = []
+        for d in value_info.type.tensor_type.shape.dim:
+            if d.dim_value > 0:
+                dims.append(d.dim_value)
+            else:
+                # Unknown dimension (e.g. batch size) – treat as 1
+                dims.append(1)
+        shape_map[name] = dims
+
+    for vi in graph.value_info:
+        _register_shape(vi)
+    for vi in graph.input:
+        _register_shape(vi)
+    for vi in graph.output:
+        _register_shape(vi)
+
+    total_macs = 0
+
+    for node in graph.node:
+        if node.op_type == "Conv":
+            # Conv: MACs ≈ Cout * Hout * Wout * (Cin * Kh * Kw)
+            # We try to read output and weight shapes; if missing, skip.
+            if not node.output:
+                continue
+            out_name = node.output[0]
+            if out_name not in shape_map:
+                continue
+
+            out_shape = shape_map[out_name]  # [N, C_out, H_out, W_out] or [N, C_out, L_out]
+            if len(out_shape) == 4:
+                _, C_out, H_out, W_out = out_shape
+                spatial = H_out * W_out
+            elif len(out_shape) == 3:
+                # 1D conv case: [N, C_out, L_out]
+                _, C_out, L_out = out_shape
+                spatial = L_out
+            else:
+                continue
+
+            # Find weight tensor shape
+            W = None
+            for init in graph.initializer:
+                if init.name == node.input[1]:
+                    W = init
+                    break
+            if W is None:
+                continue
+
+            # Weight: [C_out, C_in, Kh, Kw] or [C_out, C_in, K]
+            w_dims = list(W.dims)
+            if len(w_dims) == 4:
+                _, C_in, Kh, Kw = w_dims
+                kernel_elems = C_in * Kh * Kw
+            elif len(w_dims) == 3:
+                _, C_in, K = w_dims
+                kernel_elems = C_in * K
+            else:
+                continue
+
+            total_macs += C_out * spatial * kernel_elems
+
+        elif node.op_type == "Gemm":
+            # Fully connected: MACs ≈ M * N
+            # We look at the weight matrix (input 1)
+            W = None
+            for init in graph.initializer:
+                if init.name == node.input[1]:
+                    W = init
+                    break
+            if W is None:
+                continue
+            # Weight dims: [M, K] or [K, N]; we take product of the two largest dims
+            dims = sorted(list(W.dims))
+            if len(dims) >= 2:
+                total_macs += dims[-1] * dims[-2]
+
+    return int(total_macs)
+
+
+
 from __future__ import annotations
 
 import time
