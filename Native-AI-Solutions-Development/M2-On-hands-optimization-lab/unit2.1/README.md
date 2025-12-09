@@ -18,7 +18,7 @@ The scenario is based on **smart safety glasses** used in indoor industrial oper
 
 The main notebook for this unit is here:
 
-👉 `notebooks/2_1_optimization.ipynb`
+👉 `notebooks/03_lab_steps.ipynb`
 
 You can run it either:
 
