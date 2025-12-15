@@ -1,0 +1,7 @@
+{
+  "deployment_id": "deploy_20251215_194241",
+  "previous_status": "DEPLOYED",
+  "reason": "simulated_rollback_for_training",
+  "rolled_back_at": "2025-12-15T21:13:12Z",
+  "status": "ROLLED_BACK"
+}

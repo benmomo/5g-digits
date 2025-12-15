@@ -1,0 +1,12 @@
+{
+  "deployment_id": "deploy_20251215_194241",
+  "executed_at": "2025-12-15T21:08:26Z",
+  "reason": null,
+  "source_release_dir": "C:\\Users\\ikybe\\5g-digits\\unit32\\artifacts\\releases\\release_20251215_194241",
+  "status": "DEPLOYED",
+  "target": {
+    "channel": "simulated",
+    "environment": "staging",
+    "rollout": "100%"
+  }
+}
